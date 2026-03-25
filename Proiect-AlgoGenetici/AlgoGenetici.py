@@ -122,6 +122,9 @@ class AlgoritmGenetic:
 
     def selectieRecombinare(self, fisier):
 
+        with open(fisier, 'a') as g:
+            g.write(f"\nAcesti Cromozomi participa la selectia care are probabilitatea de recombinare {probRecombinare}: \n")
+
         partRecomb = []
         for i in range(self.dimPop):
             u = random.random()
@@ -133,11 +136,34 @@ class AlgoritmGenetic:
             else:
                 with open (fisier, 'a') as g:
                     g.write(f"Cromozomul {i} : {self.populatie[i].cromozom} are u = {u} deci NU PARTICIPA\n")
-
         return partRecomb
 
     #TODO:
-    # def recombinare(self, fisier):
+    def recombinare(self, fisier):
+
+        de_combinat = self.selectieRecombinare(fisier)
+
+        with open(fisier, 'a') as g:
+            g.write("\nRezultate recombinari:\n")
+
+        n = len(de_combinat) // 2
+
+        for i in range(n):
+            crom1 = de_combinat[i]
+            crom2 = de_combinat[i + n]
+            punct_rupere = random.randint(1, self.l - 1)
+
+            crom1prim = crom1.cromozom[:punct_rupere] + crom2.cromozom[punct_rupere:]
+            crom2prim = crom2.cromozom[:punct_rupere] + crom1.cromozom[punct_rupere:]
+
+            with open(fisier, 'a') as g:
+                g.write(f"Combinam {crom1.cromozom} cu {crom2.cromozom} in punctul {punct_rupere} \n Rezulta: {crom1prim} si {crom2prim}\n")
+
+            crom1.cromozom = crom1prim
+            crom2.cromozom = crom2prim
+
+
+
 
 
 
@@ -184,6 +210,7 @@ ag.afisareProbablilitateSelectie("output.txt")
 ag.afisareProbabilitatiCumulative("output.txt")
 ag.genUrm("output.txt")
 ag.afisarePopulatie1("output.txt")
+ag.recombinare("output.txt")
 
 # def dimensiuneCromozom(a, b, p):
 #     needed = (b - a) * (10 ** p)

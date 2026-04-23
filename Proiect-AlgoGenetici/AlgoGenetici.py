@@ -1,6 +1,6 @@
 with open("input.txt", 'r') as f:
     linii = f.readlines()
-
+# schimba la incrutisare: fara ca unele slice uri sa aiba probabilitate mai mare
 dimensiunePopulatie = int(linii[0].strip())
 a, b = map(float, linii[1].split())
 coeficienti = [float(x) for x in linii[2].split()]
@@ -9,7 +9,7 @@ probRecombinare = float(linii[4].strip())
 probMutatie = float(linii[5].strip())
 nrEtape = int(linii[6].strip())
 import random
-
+#
 class Individ:
     def __init__(self, cromozom, x, fitness):
         self.cromozom = cromozom
@@ -33,9 +33,9 @@ class AlgoritmGenetic:
     def dimensiuneCromozom(self, a, b, p):
         needed = (b - a) * (10 ** p)
         l = 0
-        while (1 << l) < needed:
+        while (2 ** l) < needed:                                        #cel mai mic nr de biti ai 2^l >= needed gen de cati biti e nevoie
             l += 1
-        d = (b - a) / ((1 << l) - 1)
+        d = (b - a) / ((2 ** l) - 1)
         return l, d
 
     def decodificare(self, cromozom):
@@ -81,32 +81,42 @@ class AlgoritmGenetic:
         self.populatie[-1].prob_cumulata = 1
 
     def procesSelectie(self):
-        #TODO DE REZOLVAT!
         u = random.random()
 
-        l = 0
-        r = len(self.populatie) - 1
+        q = []
+        for ind in self.populatie:
+            q.append(ind.prob_cumulata)
 
+        l = 0
+        r = len(q) - 1
         res = 0
+
         while l < r:
             mijloc = (l + r) // 2
 
-            if(self.populatie[mijloc].prob_cumulata <= u < self.populatie[mijloc + 1].prob_cumulata):
+            if q[mijloc] <= u < q[mijloc + 1]:
                 res = mijloc
                 break
 
-            elif(u < self.populatie[mijloc].prob_cumulata):
+            elif u < q[mijloc]:
                 r = mijloc
             else:
                 l = mijloc + 1
 
         return res, u
 
-
     def genUrm(self, fisier):
         nextGen = []
 
-        for _ in range(self.dimPop):
+        campion = self.populatie[0]
+        for individ in self.populatie:
+            if individ.fitness > campion.fitness:       #elitism: bagam cel mai bun in generatia urmatoare
+                campion = individ                       #intrebare? ar trebui protejat de recombinare si mutatie campionul elitist? nu
+
+        clona_campion = Individ(campion.cromozom, campion.x, campion.fitness)
+        nextGen.append(clona_campion)
+
+        for _ in range(self.dimPop - 1):
             index_individ, u = self.procesSelectie()
 
             temp = self.populatie[index_individ]
@@ -132,16 +142,59 @@ class AlgoritmGenetic:
             if u <= probRecombinare:
                 with open (fisier, 'a') as g:
                     g.write(f"Cromozomul {i} : {self.populatie[i].cromozom} are u = {u} deci PARTICIPA\n")
-                partRecomb.append(self.populatie[i])
+                partRecomb.append((self.populatie[i], i))
             else:
                 with open (fisier, 'a') as g:
                     g.write(f"Cromozomul {i} : {self.populatie[i].cromozom} are u = {u} deci NU PARTICIPA\n")
         return partRecomb
 
-    #TODO:
-    def recombinare(self, fisier):
+    def recombinare1(self, fisier):
 
         de_combinat = self.selectieRecombinare(fisier)
+
+        with open(fisier, 'a') as g:
+            g.write("\nCombinari cu doua breaking points: \n")
+
+        random.shuffle(de_combinat)
+
+        perechi = []
+
+        for p1 in range (1, self.l):
+            for p2 in range (1, self.l):
+                perechi.append((p1, p2))
+
+        for i in range(0, len(de_combinat) - 1, 2):
+            crom1 = de_combinat[i][0]
+            crom2 = de_combinat[i + 1][0]
+
+            index_crom1 = de_combinat[i][1]
+            index_crom2 = de_combinat[i + 1][1]
+
+            punct1, punct2 = random.choice(perechi)
+
+            c1_vechi = crom1.cromozom
+            c2_vechi = crom2.cromozom
+
+            crom1prim = c1_vechi[:punct1] + c2_vechi[punct1:punct2] + c1_vechi[punct2:]
+            crom2prim = c2_vechi[:punct1] + c1_vechi[punct1:punct2] + c2_vechi[punct2:]
+
+            with open(fisier, 'a') as g:
+                g.write(f"Combinam {c1_vechi} ({index_crom1}) cu {c2_vechi} ({index_crom2}) in punctele {punct1}, {punct2} \n Rezulta: {crom1prim} si {crom2prim}\n")
+
+            crom1.cromozom = crom1prim
+            crom2.cromozom = crom2prim
+
+            crom1.x = self.decodificare(crom1prim)
+            crom2.x = self.decodificare(crom2prim)
+
+            crom1.fitness = self.fitness(crom1prim)
+            crom2.fitness = self.fitness(crom2prim)
+
+    def recombinare(self, fisier):
+
+
+        de_combinat = self.selectieRecombinare(fisier)
+        random.shuffle(de_combinat)
 
         with open(fisier, 'a') as g:
             g.write("\nRezultate recombinari:\n")
@@ -149,18 +202,108 @@ class AlgoritmGenetic:
         n = len(de_combinat) // 2
 
         for i in range(n):
-            crom1 = de_combinat[i]
-            crom2 = de_combinat[i + n]
+            crom1 = de_combinat[i][0]
+            crom2 = de_combinat[i + n][0]
+
+            index_crom1 = de_combinat[i][1]
+            index_crom2 = de_combinat[i + n][1]
+
             punct_rupere = random.randint(1, self.l - 1)
 
             crom1prim = crom1.cromozom[:punct_rupere] + crom2.cromozom[punct_rupere:]
             crom2prim = crom2.cromozom[:punct_rupere] + crom1.cromozom[punct_rupere:]
 
             with open(fisier, 'a') as g:
-                g.write(f"Combinam {crom1.cromozom} cu {crom2.cromozom} in punctul {punct_rupere} \n Rezulta: {crom1prim} si {crom2prim}\n")
+                g.write(f"Combinam {crom1.cromozom} ({index_crom1}) cu {crom2.cromozom} ({index_crom2}) in punctul {punct_rupere} \n Rezulta: {crom1prim} si {crom2prim}\n")
 
             crom1.cromozom = crom1prim
             crom2.cromozom = crom2prim
+
+            crom1.x = self.decodificare(crom1prim)
+            crom2.x = self.decodificare(crom2prim)
+
+            crom1.fitness = self.fitness(crom1prim)
+            crom2.fitness = self.fitness(crom2prim)
+
+
+    def mutatie(self, fisier):
+
+        with open(fisier, 'a') as g:
+            g.write(f"\nMutatie cu probabilitatea: {probMutatie}\n")
+
+        for i in range(self.dimPop):
+
+            crom_nou = ""
+            is_changed = False
+
+            for bit in self.populatie[i].cromozom:
+
+                u = random.random()
+
+                if u < probMutatie:
+                    is_changed = True
+                    if bit == '0':
+                        crom_nou += "1"
+                    else:
+                        crom_nou += '0'
+                else:
+                    crom_nou += bit
+
+            if is_changed:
+                with open(fisier, 'a') as g:
+                    g.write(f"\nMutatie pe cromozomul: {i}\n")
+
+            self.populatie[i].cromozom = crom_nou
+            self.populatie[i].x = self.decodificare(self.populatie[i].cromozom)
+            self.populatie[i]. fitness = self.fitness(self.populatie[i].cromozom)
+
+    def calculMeanAndMax (self):
+
+        max_fitness = self.populatie[0].fitness
+        mean = 0
+
+        for crom in self.populatie:
+
+            max_fitness = max(max_fitness, crom.fitness)
+            mean += crom.fitness
+
+        mean = mean / self.dimPop
+
+        return mean, max_fitness
+
+    def simulare(self, nr_etape, fisier):
+        self.afisarePopulatie(fisier)
+
+        for i in range(nr_etape):
+            self.probabilitateSelectie()
+            self.probabilitatiCumulate()
+
+            if i == 0:
+                self.afisareProbablilitateSelectie(fisier)
+                self.afisareProbabilitatiCumulative(fisier)
+                self.genUrm(fisier)
+                self.recombinare1(fisier)
+                self.mutatie(fisier)
+
+                with open(fisier, 'a') as g:
+                    g.write("\nEvolutia maximului si a mediei:\n")
+
+            else:
+                self.genUrm("dump.txt")
+                self.recombinare1("dump.txt")
+                self.mutatie("dump.txt")
+            medie, maxim = self.calculMeanAndMax()
+            with open(fisier, 'a') as g:
+                g.write(f"Etapa {i + 1}: Max = {maxim:.12f}, Medie = {medie:.6f}\n")
+
+
+
+
+
+
+
+
+
 
 
 
@@ -205,12 +348,16 @@ class AlgoritmGenetic:
 
 
 ag = AlgoritmGenetic(dimensiunePopulatie, a, b, coeficienti, precizie)
-ag.afisarePopulatie("output.txt")
-ag.afisareProbablilitateSelectie("output.txt")
-ag.afisareProbabilitatiCumulative("output.txt")
-ag.genUrm("output.txt")
-ag.afisarePopulatie1("output.txt")
-ag.recombinare("output.txt")
+ag.simulare(nrEtape, "output.txt")
+# ag.afisarePopulatie("output.txt")
+# ag.afisareProbablilitateSelectie("output.txt")
+# ag.afisareProbabilitatiCumulative("output.txt")
+# ag.genUrm("output.txt")
+# ag.afisarePopulatie1("output.txt")
+# ag.recombinare("output.txt")
+# ag.afisarePopulatie1("output.txt")
+# ag.mutatie("output.txt")
+# ag.afisarePopulatie1("output.txt")
 
 # def dimensiuneCromozom(a, b, p):
 #     needed = (b - a) * (10 ** p)
@@ -243,7 +390,7 @@ ag.recombinare("output.txt")
 #     for i in range(n - 2, -1, -1):
 #         res += putere * coeficienti[i]
 #         putere = putere * numar
-#     return res
+#     return r
 #
 # def probabilitateSelectie(populatie):
 #     suma = sum()

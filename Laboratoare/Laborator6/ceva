@@ -1,0 +1,73 @@
+import sys
+
+def test_orientare(p1, p2, p3):
+    # Returnează > 0 pentru viraj la stânga, < 0 pentru viraj la dreapta, 0 pentru coliniare
+    return (p1[0] * p2[1] + p2[0] * p3[1] + p3[0] * p1[1]) - (p1[1] * p2[0] + p2[1] * p3[0] + p3[1] * p1[0])
+
+def pe_segment(p1, p2, p):
+    # Verifică dacă p este coliniar cu p1 și p2 și se află în interiorul bounding box-ului lor
+    if test_orientare(p1, p2, p) != 0:
+        return False
+    return (min(p1[0], p2[0]) <= p[0] <= max(p1[0], p2[0]) and
+            min(p1[1], p2[1]) <= p[1] <= max(p1[1], p2[1]))
+
+def solve():
+    # Citire rapidă (echivalentul a input().strip().split() dar mult mai rapid pentru date multe)
+    data = sys.stdin.read().split()
+    if not data:
+        return
+
+    n = int(data[0])
+    puncte = []
+
+    idx = 1
+    for _ in range(n):
+        puncte.append((int(data[idx]), int(data[idx+1])))
+        idx += 2
+
+    m = int(data[idx])
+    idx += 1
+
+    rezultate = []
+    for _ in range(m):
+        q = (int(data[idx]), int(data[idx+1]))
+        idx += 2
+
+        # 1. Verificăm dacă punctul se află fix pe primele/ultimele muchii legate de puncte[0]
+        if pe_segment(puncte[0], puncte[1], q) or pe_segment(puncte[0], puncte[-1], q):
+            rezultate.append("BOUNDARY")
+            continue
+
+        # 2. Verificăm dacă e complet în afara unghiului format de poligon
+        # q este la dreapta primei laturi SAU la stânga ultimei laturi
+        if test_orientare(puncte[0], puncte[1], q) < 0 or test_orientare(puncte[0], puncte[-1], q) > 0:
+            rezultate.append("OUTSIDE")
+            continue
+
+        # 3. Căutare binară pentru a găsi triunghiul în care se încadrează punctul
+        st = 1
+        dr = n - 1
+        while dr - st > 1:
+            mid = (st + dr) // 2
+
+            # Dacă q este la stânga (sau pe) vectorul puncte[0] -> puncte[mid]
+            if test_orientare(puncte[0], puncte[mid], q) >= 0:
+                st = mid
+            else:
+                dr = mid
+
+        # 4. Verificarea poziției finale față de latura triunghiului determinat
+        orientare_latura = test_orientare(puncte[st], puncte[dr], q)
+
+        if orientare_latura > 0:
+            rezultate.append("INSIDE")
+        elif orientare_latura < 0:
+            rezultate.append("OUTSIDE")
+        else:
+            rezultate.append("BOUNDARY")
+
+    # Afișarea tuturor rezultatelor deodată
+    print('\n'.join(rezultate))
+
+if __name__ == '__main__':
+    solve()
